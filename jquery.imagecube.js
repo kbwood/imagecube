@@ -1,5 +1,5 @@
 /* http://keith-wood.name/imageCube.html
-   Image Cube for jQuery v1.2.1.
+   Image Cube for jQuery v1.2.2.
    Written by Keith Wood (kbwood{at}iinet.com.au) June 2008.
    Dual licensed under the GPL (http://dev.jquery.com/browser/trunk/jquery/GPL-LICENSE.txt) and 
    MIT (http://dev.jquery.com/browser/trunk/jquery/MIT-LICENSE.txt) licenses. 
@@ -69,11 +69,11 @@ $.extend(ImageCube.prototype, {
 		target.addClass(this.markerClassName).css({position: 'relative'}).
 			children().each(function() {
 				var child = $(this);
-				$.data(this, PROP_NAME,
-					{width: child.css('width'), height: child.css('height'),
+				$.data(this, PROP_NAME, { display: child.css('display'),
+					width: child.css('width'), height: child.css('height'),
 					position: child.css('position'), lineHeight: child.css('lineHeight'),
 					letterSpacing: child.css('letterSpacing')});
-				child.css({width: target.css('width'), height: target.css('height'),
+				child.css({display: 'block', width: target.css('width'), height: target.css('height'),
 					position: 'absolute', lineHeight: allOptions.lineHeight[1],
 					letterSpacing: allOptions.letterSpacing[1]});
 			}).not(':first').hide();
@@ -131,8 +131,8 @@ $.extend(ImageCube.prototype, {
 		}
 		var animTo = {};
 		animTo[PROP_NAME] = 1.0;
-		target.attr(PROP_NAME, 0.0).animate(animTo, options.speed, options.easing,
-			function() {
+		target.attr(PROP_NAME, 0.0).stop(true, true).
+			animate(animTo, options.speed, options.easing, function() {
 				if (options.afterRotate) {
 					options.afterRotate.apply(target[0], callbackArgs);
 				}
@@ -209,7 +209,7 @@ $.extend(ImageCube.prototype, {
 			removeClass(this.markerClassName).
 			children('.imageCubeShading,.imageCubeFrom,.imageCubeTo').remove();
 		target.children().each(function() {
-			$(this).css($.data(this, PROP_NAME)).show();
+			$(this).css($.data(this, PROP_NAME));
 			$.removeData(this, PROP_NAME);
 		});
 		$.removeData(target[0], PROP_NAME);
