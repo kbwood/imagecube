@@ -1,5 +1,5 @@
 /* http://keith-wood.name/imageCube.html
-   Image Cube for jQuery v1.0.1.
+   Image Cube for jQuery v1.1.0.
    Written by Keith Wood (kbwood@virginbroadband.com.au) June 2008.
    Dual licensed under the GPL (http://dev.jquery.com/browser/trunk/jquery/GPL-LICENSE.txt) and 
    MIT (http://dev.jquery.com/browser/trunk/jquery/MIT-LICENSE.txt) licenses. 
@@ -23,6 +23,8 @@ function ImageCube() {
 		noShading: false, // True to not add shading effects
 		imagePath: '', // Any extra path to locate the highlight/shadow images
 		repeat: true, // True to automatically trigger a new transition after a pause
+		selection: 'forward', // How to choose the next item to show:
+			// 'forward', 'backward', 'random'
 		pause: 2000, // Time (milliseconds) between transitions
 		opacity: [0.0, 0.8], // Minimum/maximum opacity (0.0 - 1.0) for highlights and shadows
 		lineHeight: [0.0, 1.25], // Hidden and normal line height (em) for text
@@ -160,9 +162,17 @@ $.extend(ImageCube.prototype, {
 		var options = $.data(target, PROP_NAME);
 		var target = $(target);
 		var isFixed = false;
+		var randomSelection = function(collection) {
+			return (!collection.length ? collection : collection.filter(
+				':eq(' + Math.floor(Math.random() * collection.length) + ')'));
+		};
 		var pFrom = target.children(':visible');
-		var pTo = pFrom.next();
-		pTo = (pTo.length ? pTo : target.children(':first')); // Cycle around if at the end
+		var pTo = (options.selection == 'random' ?
+			randomSelection(target.children(':hidden')) :
+			(options.selection == 'backward' ? pFrom.prev() : pFrom.next()));
+		pTo = (pTo.length ? pTo : (options.selection == 'random' ? pFrom :
+			(options.selection == 'backward' ? target.children(':last') :
+			target.children(':first')))); // Cycle around if at the end
 		var offset = target.offset();
 		target.parents().each(function() { // Check if this area is fixed
 			var $this = $(this);
