@@ -1,5 +1,5 @@
 /* http://keith-wood.name/imageCube.html
-   Image Cube for jQuery v1.0.0.
+   Image Cube for jQuery v1.0.1.
    Written by Keith Wood (kbwood@virginbroadband.com.au) June 2008.
    Dual licensed under the GPL (http://dev.jquery.com/browser/trunk/jquery/GPL-LICENSE.txt) and 
    MIT (http://dev.jquery.com/browser/trunk/jquery/MIT-LICENSE.txt) licenses. 
@@ -20,6 +20,8 @@ function ImageCube() {
 		randomSelection: ['up', 'down', 'left', 'right'], // If direction is random, select one of these
 		speed: 2000, // Time taken (milliseconds) to transition
 		easing: 'linear', // Name of the easing to use during transitions
+		noShading: false, // True to not add shading effects
+		imagePath: '', // Any extra path to locate the highlight/shadow images
 		repeat: true, // True to automatically trigger a new transition after a pause
 		pause: 2000, // Time (milliseconds) between transitions
 		opacity: [0.0, 0.8], // Minimum/maximum opacity (0.0 - 1.0) for highlights and shadows
@@ -143,7 +145,9 @@ $.extend(ImageCube.prototype, {
 		if (!target.is('.' + this.markerClassName)) {
 			return;
 		}
-		target.stop().removeClass(this.markerClassName).children().each(function() {
+		target.stop().removeClass(this.markerClassName).
+			children('.imageCubeShading').remove();
+		target.children().each(function() {
 			$(this).css($.data(this, PROP_NAME)).show();
 			$.removeData(this, PROP_NAME);
 		});
@@ -202,7 +206,7 @@ $.extend(ImageCube.prototype, {
 			($.boxModel ? border[1][2] + border[1][3] + pad[1][2] + pad[1][3] : 0)];
 		// Define the property ranges per element
 		var stepProps = [];
-		stepProps[0] = $.extend({elem: pFrom, // Currently displayed element
+		stepProps[0] = {elem: pFrom, // Currently displayed element
 			left: {start: offset.left,
 				end: offset.left + (direction == RIGHT ? dims.width : 0), units: 'px'},
 			width: {start: dims.width - extras[0][0],
@@ -222,10 +226,8 @@ $.extend(ImageCube.prototype, {
 			lineHeight: {start: options.lineHeight[1],
 				end: (upDown ? options.lineHeight[0] : options.lineHeight[1]), units: 'em'},
 			letterSpacing: {start: options.letterSpacing[1],
-				end: (upDown ? options.letterSpacing[1] : options.letterSpacing[0]), units: 'em'}},
-			($.browser.msie ? {backgroundColor: {start: getColor(pFrom[0], 'background-color'),
-				end: (upLeft ? colors.white : colors.black), units: ''}} : {}));
-		stepProps[1] = $.extend({elem: pTo, // New element to be displayed
+				end: (upDown ? options.letterSpacing[1] : options.letterSpacing[0]), units: 'em'}};
+		stepProps[1] = {elem: pTo, // New element to be displayed
 			left: {start: offset.left + (direction == LEFT ? dims.width : 0),
 				end: offset.left, units: 'px'},
 			width: {start: (upDown ? dims.width - extras[1][0] : 0),
@@ -245,10 +247,8 @@ $.extend(ImageCube.prototype, {
 			lineHeight: {start: (upDown ? options.lineHeight[0] : options.lineHeight[1]),
 				end: options.lineHeight[1], units: 'em'},
 			letterSpacing: {start: (upDown ? options.letterSpacing[1] : options.letterSpacing[0]),
-				end: options.letterSpacing[1], units: 'em'}},
-			($.browser.msie ? {backgroundColor: {start: (upLeft ? colors.black : colors.white),
-				end: getColor(pTo[0], 'background-color'), units: ''}} : {}));
-		if (!$.browser.msie) {
+				end: options.letterSpacing[1], units: 'em'}};
+		if (!options.noShading) {
 			var setHighLow = function(props, startOpacity, endOpacity) {
 				return {elem: null,
 					left: {start: props.left.start, end: props.left.end, units: 'px'},
@@ -286,29 +286,28 @@ $.extend(ImageCube.prototype, {
 		pFrom.css(initCSS(stepProps[0]));
 		pTo.css(initCSS(stepProps[1])).show();
 		// Initialise highlight and shadow objects (or colours on IE)
-		if ($.browser.msie) {
-			pTo.css('background-color', 'rgb(' + (upLeft ? colors.black : colors.white).join(',') + ')');
-		}
-		else {
-			stepProps[2].elem = $('<div style="background-color: white; opacity: ' +
+		if (!options.noShading) {
+			stepProps[2].elem = $(($.browser.msie ? '<img src="' + options.imagePath + 'imageCubeHigh.png"' :
+				'<div') + ' class="imageCubeShading" style="background-color: white; opacity: ' +
 				firstOpacity + '; z-index: 10; position: absolute; ' +
 				'left: ' + stepProps[2].left.start + 'px; width: ' + stepProps[2].width.start + 'px; ' +
 				'top: ' + stepProps[2].top.start + 'px; height: ' + stepProps[2].height.start + 'px; ' +
-				'padding: ' + (upLeft ? pFrom : pTo).css('padding') + ';"></div>');
-			stepProps[3].elem = $('<div style="background-color: black; opacity: ' +
+				'padding: ' + (upLeft ? pFrom : pTo).css('padding') + ';"' +
+				($.browser.msie ? '/>' : '></div>'));
+			stepProps[3].elem = $(($.browser.msie ? '<img src="' + options.imagePath + 'imageCubeShad.png"' :
+				'<div') + ' class="imageCubeShading" style="background-color: black; opacity: ' +
 				(options.opacity[1] - firstOpacity) + '; z-index: 10; position: absolute; ' +
 				'left: ' + stepProps[3].left.start + 'px; width: ' + stepProps[3].width.start + 'px; ' +
 				'top: ' + stepProps[3].top.start + 'px; height: ' + stepProps[3].height.start + 'px; ' +
-				'padding: ' + (upLeft ? pTo : pFrom).css('padding') + ';"></div>');
+				'padding: ' + (upLeft ? pTo : pFrom).css('padding') + ';"' +
+				($.browser.msie ? '/>' : '></div>'));
 			target.append(stepProps[2].elem).append(stepProps[3].elem);
 		}
 		// Pre-compute differences
 		for (var i = 0; i < stepProps.length; i++) {
 			for (var name in stepProps[i]) {
 				var prop = stepProps[i][name];
-				prop.diff = (name != 'backgroundColor' ? prop.end - prop.start :
-					[prop.end[0] - prop.start[0], prop.end[1] - prop.start[1],
-					prop.end[2] - prop.start[2]]);
+				prop.diff = prop.end - prop.start;
 			}
 		}
 		return stepProps;
@@ -354,8 +353,7 @@ $.fx.step[PROP_NAME] = function(fx) {
 		fx.start = 0.0;
 		fx.end = 1.0;
 		fx.stepProps = $.imagecube._prepareImageCube(fx.elem);
-		fx.saveCSS = {backgroundColor: fx.stepProps[0].elem.css('backgroundColor'),
-			borderLeftWidth: fx.stepProps[0].elem.css('borderLeftWidth'),
+		fx.saveCSS = {borderLeftWidth: fx.stepProps[0].elem.css('borderLeftWidth'),
 			borderRightWidth: fx.stepProps[0].elem.css('borderRightWidth'),
 			borderTopWidth: fx.stepProps[0].elem.css('borderTopWidth'),
 			borderBottomWidth: fx.stepProps[0].elem.css('borderBottomWidth'),
@@ -365,12 +363,7 @@ $.fx.step[PROP_NAME] = function(fx) {
 		var newValues = {};
 		for (var name in fx.stepProps[i]) { // Update all properties
 			var prop = fx.stepProps[i][name];
-			if (name == 'backgroundColor') {
-				newValues[name] = 'rgb(' + (fx.pos * prop.diff[0] + prop.start[0]) +
-					',' + (fx.pos * prop.diff[1] + prop.start[1]) +
-					',' + (fx.pos * prop.diff[2] + prop.start[2]) + ')';
-			}
-			else if (name != 'elem') {
+			if (name != 'elem') {
 				newValues[name] = (fx.pos * prop.diff + prop.start) + prop.units;
 			}
 		}
@@ -386,91 +379,7 @@ $.fx.step[PROP_NAME] = function(fx) {
 	}
 };
 
-// Color Conversion functions copied from jquery.color.js
-// Parse strings looking for color tuples [255,255,255]
-function getRGB(color) {
-	var result;
-	// Check if we're already dealing with an array of colors
-	if ( color && color.constructor == Array && color.length == 3 )
-		return color;
-	// Look for rgb(num,num,num)
-	if (result = /rgb\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*\)/.exec(color))
-		return [parseInt(result[1]), parseInt(result[2]), parseInt(result[3])];
-	// Look for rgb(num%,num%,num%)
-	if (result = /rgb\(\s*([0-9]+(?:\.[0-9]+)?)\%\s*,\s*([0-9]+(?:\.[0-9]+)?)\%\s*,\s*([0-9]+(?:\.[0-9]+)?)\%\s*\)/.exec(color))
-		return [parseFloat(result[1])*2.55, parseFloat(result[2])*2.55, parseFloat(result[3])*2.55];
-	// Look for #a0b1c2
-	if (result = /#([a-fA-F0-9]{2})([a-fA-F0-9]{2})([a-fA-F0-9]{2})/.exec(color))
-		return [parseInt(result[1],16), parseInt(result[2],16), parseInt(result[3],16)];
-	// Look for #fff
-	if (result = /#([a-fA-F0-9])([a-fA-F0-9])([a-fA-F0-9])/.exec(color))
-		return [parseInt(result[1]+result[1],16), parseInt(result[2]+result[2],16), parseInt(result[3]+result[3],16)];
-	// Otherwise, we're most likely dealing with a named color
-	return colors[$.trim(color).toLowerCase()];
-};
-
-function getColor(elem, attr) {
-	var color;
-	do {
-		color = $.curCSS(elem, attr);
-		// Keep going until we find an element that has color, or we hit the body
-		if ( color != '' && color != 'transparent' || $.nodeName(elem, "body") )
-			break; 
-		attr = "backgroundColor";
-	} while ( elem = elem.parentNode );
-	return getRGB(color);
-};
-
-// Some named colors to work with
-var colors = {
-	aqua:			[0,255,255],
-	azure:			[240,255,255],
-	beige:			[245,245,220],
-	black:			[0,0,0],
-	blue:			[0,0,255],
-	brown:			[165,42,42],
-	cyan:			[0,255,255],
-	darkblue:		[0,0,139],
-	darkcyan:		[0,139,139],
-	darkgrey:		[169,169,169],
-	darkgreen:		[0,100,0],
-	darkkhaki:		[189,183,107],
-	darkmagenta:	[139,0,139],
-	darkolivegreen:	[85,107,47],
-	darkorange:		[255,140,0],
-	darkorchid:		[153,50,204],
-	darkred:		[139,0,0],
-	darksalmon:		[233,150,122],
-	darkviolet:		[148,0,211],
-	fuchsia:		[255,0,255],
-	gold:			[255,215,0],
-	green:			[0,128,0],
-	indigo:			[75,0,130],
-	khaki:			[240,230,140],
-	lightblue:		[173,216,230],
-	lightcyan:		[224,255,255],
-	lightgreen:		[144,238,144],
-	lightgrey:		[211,211,211],
-	lightpink:		[255,182,193],
-	lightyellow:	[255,255,224],
-	lime:			[0,255,0],
-	magenta:		[255,0,255],
-	maroon:			[128,0,0],
-	navy:			[0,0,128],
-	olive:			[128,128,0],
-	orange:			[255,165,0],
-	pink:			[255,192,203],
-	purple:			[128,0,128],
-	violet:			[128,0,128],
-	red:			[255,0,0],
-	silver:			[192,192,192],
-	white:			[255,255,255],
-	yellow:			[255,255,0]
-};
-
 /* Initialise the image cube functionality. */
-$(document).ready(function() {
-   $.imagecube = new ImageCube(); // singleton instance
-});
+$.imagecube = new ImageCube(); // singleton instance
 
 })(jQuery);
