@@ -1,5 +1,5 @@
 /* http://keith-wood.name/imageCube.html
-   Image Cube for jQuery v1.2.0.
+   Image Cube for jQuery v1.2.1.
    Written by Keith Wood (kbwood{at}iinet.com.au) June 2008.
    Dual licensed under the GPL (http://dev.jquery.com/browser/trunk/jquery/GPL-LICENSE.txt) and 
    MIT (http://dev.jquery.com/browser/trunk/jquery/MIT-LICENSE.txt) licenses. 
@@ -109,11 +109,22 @@ $.extend(ImageCube.prototype, {
 
 	/* Rotate the image cube to the next face.
 	   @param  target    (element) the containing division
+	   @param  next      (jQuery or element or string or number) next face to show (optional)
 	   @param  callback  (function) a function to call when finished with the rotation (optional) */
-	_rotateImageCube: function(target, callback) {
+	_rotateImageCube: function(target, next, callback) {
+		if (typeof next == 'function') {
+			callback = next;
+			next = '';
+		}
 		target = $(target);
 		this._stopImageCube(target[0], true);
 		var options = $.data(target[0], PROP_NAME);
+		if (next != null) {
+			next = (typeof next == 'number' ? target.children(':eq(' + next + ')') : $(next));
+			if (target.children().filter(function() { return this === next[0]; }).length > 0) {
+				options.next = next;
+			}
+		}
 		var callbackArgs = [options.current, options.next];
 		if (options.beforeRotate) {
 			options.beforeRotate.apply(target[0], callbackArgs);
@@ -236,9 +247,9 @@ $.extend(ImageCube.prototype, {
 			if (!$.browser.msie || p.css('border')) {
 				for (var i = 0; i < 4; i++) {
 					b[i] = p.css('border' + ['Left', 'Right', 'Top', 'Bottom'][i] + 'Width');
-					var value = parseFloat(b[i]);
-					b[i] = (!isNaN(value) ? value :
-						Math.max(0, $.inArray(b[i], ['thin', 'medium', 'thick']) * 2 + 1));
+					var extra = ($.browser.msie ? 1 : 0);
+					b[i] = parseFloat(
+						{thin: 1 + extra, medium: 3 + extra, thick: 5 + extra}[b[i]] || b[i]);
 				}
 			}
 			return b;
@@ -257,8 +268,8 @@ $.extend(ImageCube.prototype, {
 			($.boxModel ? border[1][2] + border[1][3] + pad[1][2] + pad[1][3] : 0)];
 		// Define the property ranges per element
 		var stepProps = [];
-		stepProps[0] = {elem: pFrom, // Currently displayed element
-			left: {start: offset.left,
+		stepProps[0] = {elem: pFrom[0], // Currently displayed element
+			props: {left: {start: offset.left,
 				end: offset.left + (direction == RIGHT ? dims.width : 0), units: 'px'},
 			width: {start: dims.width - extras[0][0],
 				end: (upDown ? dims.width - extras[0][0] : 0), units: 'px'},
@@ -277,9 +288,9 @@ $.extend(ImageCube.prototype, {
 			lineHeight: {start: options.lineHeight[1],
 				end: (upDown ? options.lineHeight[0] : options.lineHeight[1]), units: 'em'},
 			letterSpacing: {start: options.letterSpacing[1],
-				end: (upDown ? options.letterSpacing[1] : options.letterSpacing[0]), units: 'em'}};
-		stepProps[1] = {elem: pTo, // New element to be displayed
-			left: {start: offset.left + (direction == LEFT ? dims.width : 0),
+				end: (upDown ? options.letterSpacing[1] : options.letterSpacing[0]), units: 'em'}}};
+		stepProps[1] = {elem: pTo[0], // New element to be displayed
+			props: {left: {start: offset.left + (direction == LEFT ? dims.width : 0),
 				end: offset.left, units: 'px'},
 			width: {start: (upDown ? dims.width - extras[1][0] : 0),
 				end: dims.width - extras[1][0], units: 'px'},
@@ -298,7 +309,7 @@ $.extend(ImageCube.prototype, {
 			lineHeight: {start: (upDown ? options.lineHeight[0] : options.lineHeight[1]),
 				end: options.lineHeight[1], units: 'em'},
 			letterSpacing: {start: (upDown ? options.letterSpacing[1] : options.letterSpacing[0]),
-				end: options.letterSpacing[1], units: 'em'}};
+				end: options.letterSpacing[1], units: 'em'}}};
 		if (options.shading) {
 			// Initialise highlight and shadow objects (or colours on IE)
 			var setHighShad = function(props, startOpacity, endOpacity) {
@@ -316,33 +327,35 @@ $.extend(ImageCube.prototype, {
 						end: props.paddingBottom.end + props.borderBottomWidth.end, units: 'px'},
 					opacity: {start: startOpacity, end: endOpacity, units: ''}};
 			};
-			stepProps[2] = setHighShad(stepProps[upLeft ? 0 : 1], // Highlight shading (up/left)
-				firstOpacity, options.opacity - firstOpacity);
-			stepProps[3] = setHighShad(stepProps[upLeft ? 1 : 0], // Shadow shading (down/right)
-				options.opacity - firstOpacity, firstOpacity);
-			stepProps[2].elem = $(($.browser.msie ? '<img src="' + options.imagePath + 'imageCubeHigh.png"' :
+			stepProps[2] = {elem: // Highlight shading (up/left)
+				$(($.browser.msie ? '<img src="' + options.imagePath + 'imageCubeHigh.png"' :
 				'<div') + ' class="imageCubeShading" style="background-color: white; opacity: ' +
 				firstOpacity + '; z-index: 10; position: absolute;"' +
-				($.browser.msie ? '/>' : '></div>'));
-			stepProps[3].elem = $(($.browser.msie ? '<img src="' + options.imagePath + 'imageCubeShad.png"' :
+				($.browser.msie ? '/>' : '></div>'))[0],
+				props: setHighShad(stepProps[upLeft ? 0 : 1].props,
+				firstOpacity, options.opacity - firstOpacity)};
+			stepProps[3] = {elem: // Shadow shading (down/right)
+				$(($.browser.msie ? '<img src="' + options.imagePath + 'imageCubeShad.png"' :
 				'<div') + ' class="imageCubeShading" style="background-color: black; opacity: ' +
 				(options.opacity - firstOpacity) + '; z-index: 10; position: absolute;"' +
-				($.browser.msie ? '/>' : '></div>'));
+				($.browser.msie ? '/>' : '></div>'))[0],
+				props: setHighShad(stepProps[upLeft ? 1 : 0].props,
+				options.opacity - firstOpacity, firstOpacity)};
 		}
 		// Set up full 3D rotation
 		if (options.full3D) {
 			for (var i = 0; i < options.segments; i++) {
 				target.append(pFrom.clone().addClass('imageCubeFrom').
-					css({position: 'absolute', overflow: 'hidden'}));
+					css({display: 'block', position: 'absolute', overflow: 'hidden'}));
 				if (options.shading) {
-					target.append(stepProps[upLeft ? 2 : 3].elem.clone());
+					target.append($(stepProps[upLeft ? 2 : 3].elem).clone());
 				}
 			}
 			for (var i = 0; i < options.segments; i++) {
 				target.append(pTo.clone().addClass('imageCubeTo').
-					css({display: 'none', position: 'absolute', width: 0, overflow: 'hidden'}));
+					css({display: 'block', position: 'absolute', width: 0, overflow: 'hidden'}));
 				if (options.shading) {
-					target.append(stepProps[upLeft ? 3 : 2].elem.clone());
+					target.append($(stepProps[upLeft ? 3 : 2].elem).clone());
 				}
 			}
 			pFrom.hide();
@@ -362,16 +375,16 @@ $.extend(ImageCube.prototype, {
 					borderBottomWidth: props.borderBottomWidth.start + 'px',
 					letterSpacing: props.letterSpacing.start + 'em', overflow: 'hidden'};
 			};
-			pFrom.css(initCSS(stepProps[0]));
-			pTo.css(initCSS(stepProps[1])).show();
+			pFrom.css(initCSS(stepProps[0].props));
+			pTo.css(initCSS(stepProps[1].props)).show();
 			if (options.shading) {
 				target.append(stepProps[2].elem).append(stepProps[3].elem);
 			}
 		}
 		// Pre-compute differences
 		for (var i = 0; i < stepProps.length; i++) {
-			for (var name in stepProps[i]) {
-				var prop = stepProps[i][name];
+			for (var name in stepProps[i].props) {
+				var prop = stepProps[i].props[name];
 				prop.diff = prop.end - prop.start;
 			}
 		}
@@ -417,37 +430,49 @@ $.extend(ImageCube.prototype, {
 			var rat = Math.round(at);
 			var thisLeft = ral;
 			var thisTop = rat;
-			target.children(className).each(function(i) {
+			var i = 0;
+			for (var j = 0; j < target[0].childNodes.length; j++) {
+				var child = target[0].childNodes[j];
+				if (child.className != className) {
+					continue;
+				}
 				var nextLeft = Math.round(al + (i + 1) * wStep);
 				var nextTop = Math.round(at + (i + 1) * hStep);
 				var wCur = ws[0] - (upDown ? 2 * i * wStep : 0);
 				var hCur = hs[0] - (upDown ? 0 : 2 * i * hStep);
-				$(this).css({display: 'block',
-					left: (upDown ? thisLeft : al), top: (upDown ? at : thisTop),
-					width: Math.max(0, wCur - pbw), height: Math.max(0, hCur - pbh),
-					letterSpacing: (upDown ? wCur / w * (options.letterSpacing[1] -
-						options.letterSpacing[0]) + options.letterSpacing[0] :
-						pos * props.letterSpacing.diff + props.letterSpacing.start) +
-						props.letterSpacing.units,
-					lineHeight: (!upDown ? hCur / h * (options.lineHeight[1] -
-						options.lineHeight[0]) + options.lineHeight[0] :
-						pos * props.lineHeight.diff + props.lineHeight.start) +
-						props.lineHeight.units,
-					clip: 'rect(' + (!upDown ? 'auto' : (thisTop - rat) + 'px') + ',' +
+				child.style.left = (upDown ? thisLeft : al) + 'px';
+				child.style.top = (upDown ? at : thisTop) + 'px';
+				child.style.width = Math.max(0, wCur - pbw) + 'px';
+				child.style.height = Math.max(0, hCur - pbh) + 'px';
+				child.style.letterSpacing = (upDown ? wCur / w * (options.letterSpacing[1] -
+					options.letterSpacing[0]) + options.letterSpacing[0] :
+					pos * props.letterSpacing.diff + props.letterSpacing.start) +
+					props.letterSpacing.units;
+				child.style.lineHeight = (!upDown ? hCur / h * (options.lineHeight[1] -
+					options.lineHeight[0]) + options.lineHeight[0] :
+					pos * props.lineHeight.diff + props.lineHeight.start) +
+					props.lineHeight.units;
+				child.style.clip = 'rect(' + (!upDown ? 'auto' : (thisTop - rat) + 'px') + ',' +
 					(upDown ? 'auto' : (nextLeft - ral) + 'px') + ',' +
 					(!upDown ? 'auto' : (nextTop - rat) + 'px') + ',' +
-					(upDown ? 'auto' : (thisLeft - ral) + 'px') + ')'});
+					(upDown ? 'auto' : (thisLeft - ral) + 'px') + ')';
 				if (options.shading) {
-					$(this).next().css({left: thisLeft, top: thisTop,
-						width: (upDown ? ws[0] - 2 * i * wStep : nextLeft - thisLeft),
-						height: (upDown ? nextTop - thisTop : hs[0] - 2 * i * hStep),
-						opacity: opacity});
+					var shading = child.nextSibling;
+					shading.style.left = thisLeft + 'px';
+					shading.style.top = thisTop + 'px';
+					shading.style.width = (upDown ? ws[0] - 2 * i * wStep : nextLeft - thisLeft) + 'px';
+					shading.style.height = (upDown ? nextTop - thisTop : hs[0] - 2 * i * hStep) + 'px';
+					shading.style.opacity = opacity;
+					if ($.browser.msie) {
+						shading.style.filter = 'alpha(opacity=' + (opacity * 100) + ')';
+					}
 				}
 				thisLeft = nextLeft;
 				thisTop = nextTop;
-			});
+				i++;
+			}
 		};
-		update('.imageCubeFrom',
+		update('imageCubeFrom',
 			[maxReduce, -maxExpand, 0, width - current][direction], // top left
 			[0, height - current, maxReduce, -maxExpand][direction],
 			[width - maxReduce, width + maxExpand, current, width][direction], // top right
@@ -457,8 +482,9 @@ $.extend(ImageCube.prototype, {
 			[-maxExpand, maxReduce, 0, width - current][direction], // bottom left
 			[current, height, height - maxReduce, height + maxExpand][direction],
 			(!options.shading ? 0 : (upLeft ? pos : 1 - pos) *
-			stepProps[2].opacity.diff + stepProps[2].opacity.start), stepProps[0], 'start');
-		update('.imageCubeTo',
+			stepProps[2].props.opacity.diff + stepProps[2].props.opacity.start),
+			stepProps[0].props, 'start');
+		update('imageCubeTo',
 			[-maxExpand, options.reduction - maxReduce, current, 0][direction], // top left
 			[current, 0, -maxExpand, options.reduction - maxReduce][direction],
 			[width + maxExpand, width - (options.reduction - maxReduce), width, width - current][direction], // top right
@@ -468,7 +494,8 @@ $.extend(ImageCube.prototype, {
 			[options.reduction - maxReduce, -maxExpand, current, 0][direction], // bottom left
 			[height, height - current, height + maxExpand, height - (options.reduction - maxReduce)][direction],
 			(!options.shading ? 0 : (upLeft ? pos : 1 - pos) *
-			stepProps[3].opacity.diff + stepProps[3].opacity.start), stepProps[1], 'end');
+			stepProps[3].props.opacity.diff + stepProps[3].props.opacity.start),
+			stepProps[1].props, 'end');
 		return true;
 	}
 });
@@ -515,29 +542,31 @@ $.fx.step[PROP_NAME] = function(fx) {
 		fx.start = 0.0;
 		fx.end = 1.0;
 		fx.stepProps = $.imagecube._prepareAnimation(fx.elem);
-		fx.saveCSS = {borderLeftWidth: fx.stepProps[0].elem.css('borderLeftWidth'),
-			borderRightWidth: fx.stepProps[0].elem.css('borderRightWidth'),
-			borderTopWidth: fx.stepProps[0].elem.css('borderTopWidth'),
-			borderBottomWidth: fx.stepProps[0].elem.css('borderBottomWidth'),
-			padding: fx.stepProps[0].elem.css('padding')};
+		var elem = fx.stepProps[0].elem;
+		fx.saveCSS = {borderLeftWidth: elem.style.borderLeftWidth,
+			borderRightWidth: elem.style.borderRightWidth,
+			borderTopWidth: elem.style.borderTopWidth,
+			borderBottomWidth: elem.style.borderBottomWidth,
+			padding: elem.style.padding};
 	}
 
 	if (!$.imagecube._drawFull3D(fx.elem, fx.pos, fx.stepProps)) {
 		for (var i = 0; i < fx.stepProps.length; i++) { // Update all elements
-			var newValues = {};
-			for (var name in fx.stepProps[i]) { // Update all properties
-				var prop = fx.stepProps[i][name];
-				if (name != 'elem') {
-					newValues[name] = (fx.pos * prop.diff + prop.start) + prop.units;
+			var comp = fx.stepProps[i];
+			for (var name in comp.props) { // Update all properties
+				var prop = comp.props[name];
+				comp.elem.style[name] = (fx.pos * prop.diff + prop.start) + prop.units;
+				if ($.browser.msie && name == 'opacity') {
+					comp.elem.style.filter = 'alpha(opacity=' +
+						((fx.pos * prop.diff + prop.start) * 100) + ')';
 				}
 			}
-			fx.stepProps[i].elem.css(newValues);
 		}
 	}
 
 	if (fx.state == 1) { // Tidy up afterwards
-		fx.stepProps[0].elem.hide().css(fx.saveCSS);
-		fx.stepProps[1].elem.show();
+		$(fx.stepProps[0].elem).hide().css(fx.saveCSS);
+		$(fx.stepProps[1].elem).show();
 		$.imagecube._prepareRotation(fx.elem);
 	}
 };
