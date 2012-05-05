@@ -1,5 +1,5 @@
 jQuery Image Cube
-=============
+=================
 
 This plugin sets a division to rotate between images (or other things) as if they were on the faces of a cube.
 
