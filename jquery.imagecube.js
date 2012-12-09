@@ -1,5 +1,5 @@
 /* http://keith-wood.name/imageCube.html
-   Image Cube for jQuery v1.2.2.
+   Image Cube for jQuery v1.3.0.
    Written by Keith Wood (kbwood{at}iinet.com.au) June 2008.
    Dual licensed under the GPL (http://dev.jquery.com/browser/trunk/jquery/GPL-LICENSE.txt) and 
    MIT (http://dev.jquery.com/browser/trunk/jquery/MIT-LICENSE.txt) licenses. 
@@ -36,48 +36,50 @@ function ImageCube() {
 		beforeRotate: null, // Callback before rotating
 		afterRotate: null // Callback after rotating
 	};
-};
+}
 
 var UP = 0;
 var DOWN = 1;
 var LEFT = 2;
 var RIGHT = 3;
 
-var PROP_NAME = 'imageCube';
-
 $.extend(ImageCube.prototype, {
 	/* Class name added to elements to indicate already configured with image cube. */
 	markerClassName: 'hasImageCube',
+	/* Name of the data property for instance settings. */
+	propertyName: 'imageCube',
 
 	/* Override the default settings for all image cube instances.
-	   @param  options  (object) the new settings to use as defaults */
+	   @param  options  (object) the new settings to use as defaults
+	   @return  (ImageCube) this object */
 	setDefaults: function(options) {
-		extendRemove(this._defaults, options || {});
+		$.extend(this._defaults, options || {});
+		return this;
 	},
 
 	/* Attach the image cube functionality to a div.
-	   @param  target   (element) the containing division
-	   @param  options  (object) the settings for this image cube instance (optional) */
-	_attachImageCube: function(target, options) {
+	   @param  target   (element) the control to affect
+	   @param  options  (object) the custom options for this instance */
+	_attachPlugin: function(target, options) {
 		target = $(target);
 		if (target.hasClass(this.markerClassName)) {
 			return;
 		}
-		var allOptions = $.extend({_position: target.css('position')},
-			this._defaults, options || {});
-		$.data(target[0], PROP_NAME, allOptions);
+		var inst = {options: $.extend({}, this._defaults, options),
+			_position: target.css('position')};
 		target.addClass(this.markerClassName).css({position: 'relative'}).
+			data(this.propertyName, inst).
 			children().each(function() {
 				var child = $(this);
-				$.data(this, PROP_NAME, { display: child.css('display'),
-					width: child.css('width'), height: child.css('height'),
-					position: child.css('position'), lineHeight: child.css('lineHeight'),
-					letterSpacing: child.css('letterSpacing')});
-				child.css({display: 'block', width: target.css('width'), height: target.css('height'),
-					position: 'absolute', lineHeight: allOptions.lineHeight[1],
-					letterSpacing: allOptions.letterSpacing[1]});
+				child.data(plugin.propertyName, {display: child.css('display'),
+						width: child.css('width'), height: child.css('height'),
+						position: child.css('position'), lineHeight: child.css('lineHeight'),
+						letterSpacing: child.css('letterSpacing')}).
+					css({display: 'block', width: target.css('width'), height: target.css('height'),
+						position: 'absolute', lineHeight: inst.options.lineHeight[1],
+						letterSpacing: inst.options.letterSpacing[1]});
 			}).not(':first').hide();
-		this._prepareRotation(target[0]);
+		this._prepareRotation(target);
 	},
 
 	/* Note current visible child and schedule a repeat rotation (if required).
@@ -85,56 +87,59 @@ $.extend(ImageCube.prototype, {
 	_prepareRotation: function(target) {
 		target = $(target);
 		target.children('.imageCubeShading,.imageCubeFrom,.imageCubeTo').remove();
-		var options = $.data(target[0], PROP_NAME);
-		options.current = target.children(':visible')[0];
+		var inst = target.data(this.propertyName);
+		inst.current = target.children(':visible')[0];
+		inst.current = (inst.current ? inst.current : target.children(':first')[0]);
 		var randomSelection = function(collection) {
 			return (!collection.length ? collection : collection.filter(
 				':eq(' + Math.floor(Math.random() * collection.length) + ')'));
 		};
-		options.next = (options.selection == 'random' ?
+		inst.next = (inst.options.selection == 'random' ?
 			randomSelection(target.children(':hidden')) :
-			(options.selection == 'backward' ? $(options.current).prev() :
-			$(options.current).next()));
-		options.next = (options.next.length ? options.next :
-			(options.selection == 'random' ? options.current :
-			(options.selection == 'backward' ? target.children(':last') :
+			(inst.options.selection == 'backward' ? $(inst.current).prev() :
+			$(inst.current).next()));
+		inst.next = (inst.next.length ? inst.next :
+			(inst.options.selection == 'random' ? inst.current :
+			(inst.options.selection == 'backward' ? target.children(':last') :
 			target.children(':first'))))[0]; // Cycle around if at the end
-		if (options.repeat && !options._timer) {
-			options._timer = setTimeout(function() {
-					$.imagecube._rotateImageCube(target[0]); },
-				options.pause);
+		if (inst.options.repeat && !inst._timer) {
+			inst._timer = setTimeout(function() {
+					plugin._rotatePlugin(target); },
+				inst.options.pause);
 		}
-		$.data(target[0], PROP_NAME, options);
 	},
 
 	/* Rotate the image cube to the next face.
 	   @param  target    (element) the containing division
 	   @param  next      (jQuery or element or string or number) next face to show (optional)
 	   @param  callback  (function) a function to call when finished with the rotation (optional) */
-	_rotateImageCube: function(target, next, callback) {
+	_rotatePlugin: function(target, next, callback) {
+		target = $(target);
+		if (!target.hasClass(this.markerClassName)) {
+			return;
+		}
 		if (typeof next == 'function') {
 			callback = next;
-			next = '';
+			next = null;
 		}
-		target = $(target);
-		this._stopImageCube(target[0], true);
-		var options = $.data(target[0], PROP_NAME);
+		this._stopPlugin(target, true);
+		var inst = target.data(this.propertyName);
 		if (next != null) {
 			next = (typeof next == 'number' ? target.children(':eq(' + next + ')') : $(next));
 			if (target.children().filter(function() { return this === next[0]; }).length > 0) {
-				options.next = next;
+				inst.next = next;
 			}
 		}
-		var callbackArgs = [options.current, options.next];
-		if (options.beforeRotate) {
-			options.beforeRotate.apply(target[0], callbackArgs);
+		var callbackArgs = [inst.current, inst.next];
+		if ($.isFunction(inst.options.beforeRotate)) {
+			inst.options.beforeRotate.apply(target[0], callbackArgs);
 		}
 		var animTo = {};
-		animTo[PROP_NAME] = 1.0;
-		target.attr(PROP_NAME, 0.0).stop(true, true).
-			animate(animTo, options.speed, options.easing, function() {
-				if (options.afterRotate) {
-					options.afterRotate.apply(target[0], callbackArgs);
+		animTo[this.propertyName] = 1.0;
+		target.attr(this.propertyName, 0.0).stop(true, true).
+			animate(animTo, inst.options.speed, inst.options.easing, function() {
+				if ($.isFunction(inst.options.afterRotate)) {
+					inst.options.afterRotate.apply(target[0], callbackArgs);
 				}
 				if (callback) {
 					callback.apply(target[0]);
@@ -145,81 +150,98 @@ $.extend(ImageCube.prototype, {
 	/* Retrieve the currently visible child of an image cube div.
 	   @param  target  (element) the containing division
 	   @return  (element) the currently displayed child of target division */
-	_currentImageCube: function(target) {
-		return ($(target).hasClass(this.markerClassName) ?
-			$.data(target, PROP_NAME).current : null);
+	_currentPlugin: function(target) {
+		target = $(target);
+		return (target.hasClass(this.markerClassName) ?
+			target.data(this.propertyName).current : null);
 	},
 
 	/* Retrieve the next visible child of an image cube div.
 	   @param  target  (element) the containing division
 	   @return  (element) the next to be displayed child of target division */
-	_nextImageCube: function(target) {
-		return ($(target).hasClass(this.markerClassName) ?
-			$.data(target, PROP_NAME).next : null);
+	_nextPlugin: function(target) {
+		target = $(target);
+		return (target.hasClass(this.markerClassName) ?
+			target.data(this.propertyName).next : null);
 	},
 
 	/* Stop the image cube automatically rotating to the next face.
 	   @param  target     (element) the containing division
 	   @param  timerOnly  (boolean) true if only temporarily stopping (optional) */
-	_stopImageCube: function(target, timerOnly) {
-		var options = $.data(target, PROP_NAME);
-		if (options._timer) {
-			clearTimeout(options._timer);
-			options._timer = null;
-		}
-		if (!timerOnly) {
-			options.repeat = false;
-		}
-		$.data(target, PROP_NAME, options);
-	},
-
-	/* Start the image cube automatically rotating to the next face.
-	   @param  target  (element) the containing division */
-	_startImageCube: function(target) {
-		this._changeImageCube(target, {repeat: true});
-	},
-
-	/* Reconfigure the settings for an image cube div.
-	   @param  target   (element) the containing division
-	   @param  options  (object) the new settings for this image cube instance or
-	                    (string) the name of the setting
-	   @param  value    (any, optional) the value of the setting */
-	_changeImageCube: function(target, options, value) {
-		if (typeof options == 'string') {
-			var opts = {};
-			opts[options] = value;
-			options = opts;
-		}
-		var curOptions = $.data(target, PROP_NAME);
-		extendRemove(curOptions || {}, options || {});
-		$.data(target, PROP_NAME, curOptions);
-		this._prepareRotation(target);
-	},
-
-	/* Remove the image cube functionality from a div.
-	   @param  target  (element) the containing division */
-	_destroyImageCube: function(target) {
+	_stopPlugin: function(target, timerOnly) {
 		target = $(target);
 		if (!target.hasClass(this.markerClassName)) {
 			return;
 		}
-		this._stopImageCube(target[0]);
-		var options = $.data(target[0], PROP_NAME);
-		target.stop().css({position: options._position}).
+		var inst = target.data(this.propertyName);
+		if (inst._timer) {
+			clearTimeout(inst._timer);
+			inst._timer = null;
+		}
+		if (!timerOnly) {
+			inst.options.repeat = false;
+		}
+	},
+
+	/* Start the image cube automatically rotating to the next face.
+	   @param  target  (element) the containing division */
+	_startPlugin: function(target) {
+		this._optionPlugin(target, {repeat: true});
+	},
+
+	/* Retrieve or reconfigure the settings for a control.
+	   @param  target   (element) the control to affect
+	   @param  options  (object) the new options for this instance or
+	                    (string) an individual property name
+	   @param  value    (any) the individual property value (omit if options
+	                    is an object or to retrieve the value of a setting)
+	   @return  (any) if retrieving a value */
+	_optionPlugin: function(target, options, value) {
+		target = $(target);
+		var inst = target.data(this.propertyName);
+		if (!options || (typeof options == 'string' && value == null)) { // Get option
+			var name = options;
+			options = (inst || {}).options;
+			return (options && name ? options[name] : options);
+		}
+
+		if (!target.hasClass(this.markerClassName)) {
+			return;
+		}
+		options = options || {};
+		if (typeof options == 'string') {
+			var name = options;
+			options = {};
+			options[name] = value;
+		}
+		$.extend(inst.options, options);
+		this._prepareRotation(target);
+	},
+
+	/* Remove the plugin functionality from a control.
+	   @param  target  (element) the control to affect */
+	_destroyPlugin: function(target) {
+		target = $(target);
+		if (!target.hasClass(this.markerClassName)) {
+			return;
+		}
+		this._stopPlugin(target);
+		var inst = target.data(this.propertyName);
+		target.stop().css({position: inst._position}).
 			removeClass(this.markerClassName).
+			removeData(this.propertyName).
 			children('.imageCubeShading,.imageCubeFrom,.imageCubeTo').remove();
 		target.children().each(function() {
-			$(this).css($.data(this, PROP_NAME));
-			$.removeData(this, PROP_NAME);
-		});
-		$.removeData(target[0], PROP_NAME);
+			var child = $(this);
+			child.css(child.data(this.propertyName)).removeData(this.propertyName);
+		}).show();
 	},
 
 	/* Prepare the image cube for animation.
 	   @param  target  (element) the containing division */
 	_prepareAnimation: function(target) {
-		var options = $.data(target, PROP_NAME);
-		var target = $(target);
+		target = $(target);
+		var inst = target.data(this.propertyName);
 		var offset = {left: 0, top: 0};
 		target.parents().each(function() { // Check if this area is fixed
 			var $this = $(this);
@@ -230,16 +252,16 @@ $.extend(ImageCube.prototype, {
 			}
 		});
 		var dims = {width: target.width(), height: target.height()};
-		var direction = (options.direction != 'random' ? options.direction :
-			options.randomSelection[Math.floor(Math.random() * options.randomSelection.length)]);
+		var direction = (inst.options.direction != 'random' ? inst.options.direction :
+			inst.options.randomSelection[Math.floor(Math.random() * inst.options.randomSelection.length)]);
 		direction = Math.max(0, $.inArray(direction, ['up', 'down', 'left', 'right']));
-		options._curDirection = direction;
+		inst._curDirection = direction;
 		var upDown = (direction == UP || direction == DOWN);
 		var leftRight = (direction == LEFT || direction == RIGHT);
 		var upLeft = (direction == UP || direction == LEFT);
-		var firstOpacity = (upLeft ? 0 : options.opacity);
-		var pFrom = $(options.current);
-		var pTo = $(options.next);
+		var firstOpacity = (upLeft ? 0 : inst.options.opacity);
+		var pFrom = $(inst.current);
+		var pTo = $(inst.next);
 		// Calculate borders and padding for both elements
 		var border = [];
 		var parseBorders = function(p) {
@@ -285,10 +307,10 @@ $.extend(ImageCube.prototype, {
 			borderRightWidth: {start: border[0][1], end: (leftRight ? 0 : border[0][1]), units: 'px'},
 			borderTopWidth: {start: border[0][2], end: (upDown ? 0 : border[0][2]), units: 'px'},
 			borderBottomWidth: {start: border[0][3], end: (upDown ? 0 : border[0][3]), units: 'px'},
-			lineHeight: {start: options.lineHeight[1],
-				end: (upDown ? options.lineHeight[0] : options.lineHeight[1]), units: 'em'},
-			letterSpacing: {start: options.letterSpacing[1],
-				end: (upDown ? options.letterSpacing[1] : options.letterSpacing[0]), units: 'em'}}};
+			lineHeight: {start: inst.options.lineHeight[1],
+				end: (upDown ? inst.options.lineHeight[0] : inst.options.lineHeight[1]), units: 'em'},
+			letterSpacing: {start: inst.options.letterSpacing[1],
+				end: (upDown ? inst.options.letterSpacing[1] : inst.options.letterSpacing[0]), units: 'em'}}};
 		stepProps[1] = {elem: pTo[0], // New element to be displayed
 			props: {left: {start: offset.left + (direction == LEFT ? dims.width : 0),
 				end: offset.left, units: 'px'},
@@ -306,11 +328,11 @@ $.extend(ImageCube.prototype, {
 			borderRightWidth: {start: (leftRight ? 0 : border[1][1]), end: border[1][1], units: 'px'},
 			borderTopWidth: {start: (upDown ? 0 : border[1][2]), end: border[1][2], units: 'px'},
 			borderBottomWidth: {start: (upDown ? 0 : border[1][3]), end: border[1][3], units: 'px'},
-			lineHeight: {start: (upDown ? options.lineHeight[0] : options.lineHeight[1]),
-				end: options.lineHeight[1], units: 'em'},
-			letterSpacing: {start: (upDown ? options.letterSpacing[1] : options.letterSpacing[0]),
-				end: options.letterSpacing[1], units: 'em'}}};
-		if (options.shading) {
+			lineHeight: {start: (upDown ? inst.options.lineHeight[0] : inst.options.lineHeight[1]),
+				end: inst.options.lineHeight[1], units: 'em'},
+			letterSpacing: {start: (upDown ? inst.options.letterSpacing[1] : inst.options.letterSpacing[0]),
+				end: inst.options.letterSpacing[1], units: 'em'}}};
+		if (inst.options.shading) {
 			// Initialise highlight and shadow objects (or colours on IE)
 			var setHighShad = function(props, startOpacity, endOpacity) {
 				return {left: {start: props.left.start, end: props.left.end, units: 'px'},
@@ -328,33 +350,33 @@ $.extend(ImageCube.prototype, {
 					opacity: {start: startOpacity, end: endOpacity, units: ''}};
 			};
 			stepProps[2] = {elem: // Highlight shading (up/left)
-				$(($.browser.msie ? '<img src="' + options.imagePath + 'imageCubeHigh.png"' :
+				$(($.browser.msie ? '<img src="' + inst.options.imagePath + 'imageCubeHigh.png"' :
 				'<div') + ' class="imageCubeShading" style="background-color: white; opacity: ' +
 				firstOpacity + '; z-index: 10; position: absolute;"' +
 				($.browser.msie ? '/>' : '></div>'))[0],
 				props: setHighShad(stepProps[upLeft ? 0 : 1].props,
-				firstOpacity, options.opacity - firstOpacity)};
+				firstOpacity, inst.options.opacity - firstOpacity)};
 			stepProps[3] = {elem: // Shadow shading (down/right)
-				$(($.browser.msie ? '<img src="' + options.imagePath + 'imageCubeShad.png"' :
+				$(($.browser.msie ? '<img src="' + inst.options.imagePath + 'imageCubeShad.png"' :
 				'<div') + ' class="imageCubeShading" style="background-color: black; opacity: ' +
-				(options.opacity - firstOpacity) + '; z-index: 10; position: absolute;"' +
+				(inst.options.opacity - firstOpacity) + '; z-index: 10; position: absolute;"' +
 				($.browser.msie ? '/>' : '></div>'))[0],
 				props: setHighShad(stepProps[upLeft ? 1 : 0].props,
-				options.opacity - firstOpacity, firstOpacity)};
+				inst.options.opacity - firstOpacity, firstOpacity)};
 		}
 		// Set up full 3D rotation
-		if (options.full3D) {
-			for (var i = 0; i < options.segments; i++) {
+		if (inst.options.full3D) {
+			for (var i = 0; i < inst.options.segments; i++) {
 				target.append(pFrom.clone().addClass('imageCubeFrom').
 					css({display: 'block', position: 'absolute', overflow: 'hidden'}));
-				if (options.shading) {
+				if (inst.options.shading) {
 					target.append($(stepProps[upLeft ? 2 : 3].elem).clone());
 				}
 			}
-			for (var i = 0; i < options.segments; i++) {
+			for (var i = 0; i < inst.options.segments; i++) {
 				target.append(pTo.clone().addClass('imageCubeTo').
 					css({display: 'block', position: 'absolute', width: 0, overflow: 'hidden'}));
-				if (options.shading) {
+				if (inst.options.shading) {
 					target.append($(stepProps[upLeft ? 3 : 2].elem).clone());
 				}
 			}
@@ -377,7 +399,7 @@ $.extend(ImageCube.prototype, {
 			};
 			pFrom.css(initCSS(stepProps[0].props));
 			pTo.css(initCSS(stepProps[1].props)).show();
-			if (options.shading) {
+			if (inst.options.shading) {
 				target.append(stepProps[2].elem).append(stepProps[3].elem);
 			}
 		}
@@ -397,12 +419,12 @@ $.extend(ImageCube.prototype, {
 	   @param  stepProps  (object[]) details about the items being animated
 	   @return  (boolean) true if drawn in 3D, false if not */
 	_drawFull3D: function(target, pos, stepProps) {
-		var options = $.data(target, PROP_NAME);
-		if (!options.full3D) {
+		target = $(target);
+		var inst = target.data(this.propertyName);
+		if (!inst.options.full3D) {
 			return false;
 		}
-		var target = $(target);
-		var direction = options._curDirection;
+		var direction = inst._curDirection;
 		var upDown = (direction == UP || direction == DOWN);
 		var upLeft = (direction == UP || direction == LEFT);
 		var width = target.width();
@@ -411,10 +433,10 @@ $.extend(ImageCube.prototype, {
 			return true;
 		}
 		var current = (1 - pos) * (upDown ? height : width);
-		var segments = options.segments;
-		var maxExpand = options.expansion * (1 - Math.abs(2 * current - (upDown ? height : width)) /
+		var segments = inst.options.segments;
+		var maxExpand = inst.options.expansion * (1 - Math.abs(2 * current - (upDown ? height : width)) /
 			(upDown ? height : width));
-		var maxReduce = options.reduction - (options.reduction * current / (upDown ? height : width));
+		var maxReduce = inst.options.reduction - (inst.options.reduction * current / (upDown ? height : width));
 		var update = function(className, al, at, bl, bt, cl, ct, dl, dt, opacity, props, attr) {
 			var ws = [bl - al, cl - dl];
 			var w = Math.max(ws[0], ws[1]);
@@ -444,19 +466,19 @@ $.extend(ImageCube.prototype, {
 				child.style.top = (upDown ? at : thisTop) + 'px';
 				child.style.width = Math.max(0, wCur - pbw) + 'px';
 				child.style.height = Math.max(0, hCur - pbh) + 'px';
-				child.style.letterSpacing = (upDown ? wCur / w * (options.letterSpacing[1] -
-					options.letterSpacing[0]) + options.letterSpacing[0] :
+				child.style.letterSpacing = (upDown ? wCur / w * (inst.options.letterSpacing[1] -
+					inst.options.letterSpacing[0]) + inst.options.letterSpacing[0] :
 					pos * props.letterSpacing.diff + props.letterSpacing.start) +
 					props.letterSpacing.units;
-				child.style.lineHeight = (!upDown ? hCur / h * (options.lineHeight[1] -
-					options.lineHeight[0]) + options.lineHeight[0] :
+				child.style.lineHeight = (!upDown ? hCur / h * (inst.options.lineHeight[1] -
+					inst.options.lineHeight[0]) + inst.options.lineHeight[0] :
 					pos * props.lineHeight.diff + props.lineHeight.start) +
 					props.lineHeight.units;
 				child.style.clip = 'rect(' + (!upDown ? 'auto' : (thisTop - rat) + 'px') + ',' +
 					(upDown ? 'auto' : (nextLeft - ral) + 'px') + ',' +
 					(!upDown ? 'auto' : (nextTop - rat) + 'px') + ',' +
 					(upDown ? 'auto' : (thisLeft - ral) + 'px') + ')';
-				if (options.shading) {
+				if (inst.options.shading) {
 					var shading = child.nextSibling;
 					shading.style.left = thisLeft + 'px';
 					shading.style.top = thisTop + 'px';
@@ -481,67 +503,73 @@ $.extend(ImageCube.prototype, {
 			[current, height, height + maxExpand, height - maxReduce][direction],
 			[-maxExpand, maxReduce, 0, width - current][direction], // bottom left
 			[current, height, height - maxReduce, height + maxExpand][direction],
-			(!options.shading ? 0 : (upLeft ? pos : 1 - pos) *
+			(!inst.options.shading ? 0 : (upLeft ? pos : 1 - pos) *
 			stepProps[2].props.opacity.diff + stepProps[2].props.opacity.start),
 			stepProps[0].props, 'start');
 		update('imageCubeTo',
-			[-maxExpand, options.reduction - maxReduce, current, 0][direction], // top left
-			[current, 0, -maxExpand, options.reduction - maxReduce][direction],
-			[width + maxExpand, width - (options.reduction - maxReduce), width, width - current][direction], // top right
-			[current, 0, options.reduction - maxReduce, -maxExpand][direction],
-			[width - (options.reduction - maxReduce), width + maxExpand, width, width - current][direction], // bottom right
-			[height, height - current, height - (options.reduction - maxReduce), height + maxExpand][direction],
-			[options.reduction - maxReduce, -maxExpand, current, 0][direction], // bottom left
-			[height, height - current, height + maxExpand, height - (options.reduction - maxReduce)][direction],
-			(!options.shading ? 0 : (upLeft ? pos : 1 - pos) *
+			[-maxExpand, inst.options.reduction - maxReduce, current, 0][direction], // top left
+			[current, 0, -maxExpand, inst.options.reduction - maxReduce][direction],
+			[width + maxExpand, width - (inst.options.reduction - maxReduce), width, width - current][direction], // top right
+			[current, 0, inst.options.reduction - maxReduce, -maxExpand][direction],
+			[width - (inst.options.reduction - maxReduce), width + maxExpand, width, width - current][direction], // bottom right
+			[height, height - current, height - (inst.options.reduction - maxReduce), height + maxExpand][direction],
+			[inst.options.reduction - maxReduce, -maxExpand, current, 0][direction], // bottom left
+			[height, height - current, height + maxExpand, height - (inst.options.reduction - maxReduce)][direction],
+			(!inst.options.shading ? 0 : (upLeft ? pos : 1 - pos) *
 			stepProps[3].props.opacity.diff + stepProps[3].props.opacity.start),
 			stepProps[1].props, 'end');
 		return true;
 	}
 });
 
-/* jQuery extend now ignores nulls!
-   @param  target  (object) the object to extend
-   @param  props   (object) the attributes to modify
-   @return  (object) the updated target */
-function extendRemove(target, props) {
-	$.extend(target, props);
-	for (var name in props) {
-		if (props[name] == null) {
-			target[name] = null;
-		}
+// The list of commands that return values and don't permit chaining
+var getters = ['current', 'next'];
+
+/* Determine whether a command is a getter and doesn't permit chaining.
+   @param  command    (string, optional) the command to run
+   @param  otherArgs  ([], optional) any other arguments for the command
+   @return  true if the command is a getter, false if not */
+function isNotChained(command, otherArgs) {
+	if (command == 'option' && (otherArgs.length == 0 ||
+			(otherArgs.length == 1 && typeof otherArgs[0] == 'string'))) {
+		return true;
 	}
-	return target;
+	return $.inArray(command, getters) > -1;
 }
 
 /* Attach the image cube functionality to a jQuery selection.
-   @param  command  (string) the command to run (optional, default 'attach')
-   @param  options  (object) the new settings to use for these image cube instances
-   @return  (jQuery) for chaining further calls */
+   @param  options  (object) the new settings to use for these instances (optional) or
+                    (string) the command to run (optional)
+   @return  (jQuery) for chaining further calls or
+            (any) getter value */
 $.fn.imagecube = function(options) {
 	var otherArgs = Array.prototype.slice.call(arguments, 1);
-	if (options == 'current' || options == 'next') {
-		return $.imagecube['_' + options + 'ImageCube'].
-			apply($.imagecube, [this[0]].concat(otherArgs));
+	if (isNotChained(options, otherArgs)) {
+		return plugin['_' + options + 'Plugin'].apply(plugin, [this[0]].concat(otherArgs));
 	}
 	return this.each(function() {
 		if (typeof options == 'string') {
-			$.imagecube['_' + options + 'ImageCube'].
-				apply($.imagecube, [this].concat(otherArgs));
+			if (!plugin['_' + options + 'Plugin']) {
+				throw 'Unknown command: ' + options;
+			}
+			plugin['_' + options + 'Plugin'].apply(plugin, [this].concat(otherArgs));
 		}
 		else {
-			$.imagecube._attachImageCube(this, options);
+			plugin._attachPlugin(this, options || {});
 		}
 	});
 };
 
+/* Initialise the image cube functionality. */
+var plugin = $.imagecube = new ImageCube(); // Singleton instance
+
 /* Enable synchronised animation for all of the image cube properties.
    @param  fx  (object) the effects instance to animate */
-$.fx.step[PROP_NAME] = function(fx) {
-	if (fx.state == 0 || !fx.stepProps) { // Initialisation
+$.fx.step[plugin.propertyName] = function(fx) {
+	if (!fx.stepProps) { // Initialisation
 		fx.start = 0.0;
 		fx.end = 1.0;
-		fx.stepProps = $.imagecube._prepareAnimation(fx.elem);
+		fx.stepProps = plugin._prepareAnimation(fx.elem);
 		var elem = fx.stepProps[0].elem;
 		fx.saveCSS = {borderLeftWidth: elem.style.borderLeftWidth,
 			borderRightWidth: elem.style.borderRightWidth,
@@ -550,7 +578,7 @@ $.fx.step[PROP_NAME] = function(fx) {
 			padding: elem.style.padding};
 	}
 
-	if (!$.imagecube._drawFull3D(fx.elem, fx.pos, fx.stepProps)) {
+	if (!plugin._drawFull3D(fx.elem, fx.pos, fx.stepProps)) {
 		for (var i = 0; i < fx.stepProps.length; i++) { // Update all elements
 			var comp = fx.stepProps[i];
 			for (var name in comp.props) { // Update all properties
@@ -564,14 +592,11 @@ $.fx.step[PROP_NAME] = function(fx) {
 		}
 	}
 
-	if (fx.state == 1) { // Tidy up afterwards
+	if (fx.pos == 1) { // Tidy up afterwards
 		$(fx.stepProps[0].elem).hide().css(fx.saveCSS);
 		$(fx.stepProps[1].elem).show();
-		$.imagecube._prepareRotation(fx.elem);
+		plugin._prepareRotation(fx.elem);
 	}
 };
-
-/* Initialise the image cube functionality. */
-$.imagecube = new ImageCube(); // singleton instance
 
 })(jQuery);
