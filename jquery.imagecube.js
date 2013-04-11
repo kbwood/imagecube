@@ -1,8 +1,7 @@
 /* http://keith-wood.name/imageCube.html
-   Image Cube for jQuery v1.3.0.
+   Image Cube for jQuery v1.3.1.
    Written by Keith Wood (kbwood{at}iinet.com.au) June 2008.
-   Dual licensed under the GPL (http://dev.jquery.com/browser/trunk/jquery/GPL-LICENSE.txt) and 
-   MIT (http://dev.jquery.com/browser/trunk/jquery/MIT-LICENSE.txt) licenses. 
+   Available under the MIT (https://github.com/jquery/jquery/blob/master/MIT-LICENSE.txt) license. 
    Please attribute the author if you use it. */
 
 /* Rotate images (or other things) as if on the faces of a cube.
@@ -266,13 +265,11 @@ $.extend(ImageCube.prototype, {
 		var border = [];
 		var parseBorders = function(p) {
 			var b = [0, 0, 0, 0];
-			if (!$.browser.msie || p.css('border')) {
-				for (var i = 0; i < 4; i++) {
-					b[i] = p.css('border' + ['Left', 'Right', 'Top', 'Bottom'][i] + 'Width');
-					var extra = ($.browser.msie ? 1 : 0);
-					b[i] = parseFloat(
-						{thin: 1 + extra, medium: 3 + extra, thick: 5 + extra}[b[i]] || b[i]);
-				}
+			if (p.css('border') != undefined) { // IE
+				$.each(['Left', 'Right', 'Top', 'Bottom'], function(i, side) {
+					b[i] = p.css('border' + side + 'Width');
+					b[i] = parseFloat({thin: 1, medium: 3, thick: 5}[b[i]] || b[i]);
+				});
 			}
 			return b;
 		};
@@ -284,10 +281,10 @@ $.extend(ImageCube.prototype, {
 		pad[1] = [parseFloat(pTo.css('padding-left')), parseFloat(pTo.css('padding-right')),
 			parseFloat(pTo.css('padding-top')), parseFloat(pTo.css('padding-bottom'))];
 		var extras = [];
-		extras[0] = [($.boxModel ? border[0][0] + border[0][1] + pad[0][0] + pad[0][1] : 0),
-			($.boxModel ? border[0][2] + border[0][3] + pad[0][2] + pad[0][3] : 0)];
-		extras[1] = [($.boxModel ? border[1][0] + border[1][1] + pad[1][0] + pad[1][1] : 0),
-			($.boxModel ? border[1][2] + border[1][3] + pad[1][2] + pad[1][3] : 0)];
+		extras[0] = ($.support.boxModel ? [border[0][0] + border[0][1] + pad[0][0] + pad[0][1],
+			border[0][2] + border[0][3] + pad[0][2] + pad[0][3]] : [0, 0]);
+		extras[1] = ($.support.boxModel ? [border[1][0] + border[1][1] + pad[1][0] + pad[1][1],
+			border[1][2] + border[1][3] + pad[1][2] + pad[1][3]] : [0, 0]);
 		// Define the property ranges per element
 		var stepProps = [];
 		stepProps[0] = {elem: pFrom[0], // Currently displayed element
@@ -318,7 +315,7 @@ $.extend(ImageCube.prototype, {
 				end: dims.width - extras[1][0], units: 'px'},
 			top: {start: offset.top + (direction == UP ? dims.height : 0),
 				end: offset.top, units: 'px'},
-			height: {start: (upDown ? ($.browser.msie ? 1 : 0) : dims.height - extras[1][1]),
+			height: {start: (upDown ? 0 : dims.height - extras[1][1]),
 				end : dims.height - extras[1][1], units: 'px'},
 			paddingLeft: {start: (leftRight ? 0 : pad[1][0]), end: pad[1][0], units: 'px'},
 			paddingRight: {start: (leftRight ? 0 : pad[1][1]), end: pad[1][1], units: 'px'},
@@ -350,17 +347,17 @@ $.extend(ImageCube.prototype, {
 					opacity: {start: startOpacity, end: endOpacity, units: ''}};
 			};
 			stepProps[2] = {elem: // Highlight shading (up/left)
-				$(($.browser.msie ? '<img src="' + inst.options.imagePath + 'imageCubeHigh.png"' :
+				$((!$.support.opacity ? '<img src="' + inst.options.imagePath + 'imageCubeHigh.png"' :
 				'<div') + ' class="imageCubeShading" style="background-color: white; opacity: ' +
 				firstOpacity + '; z-index: 10; position: absolute;"' +
-				($.browser.msie ? '/>' : '></div>'))[0],
+				(!$.support.opacity ? '/>' : '></div>'))[0],
 				props: setHighShad(stepProps[upLeft ? 0 : 1].props,
 				firstOpacity, inst.options.opacity - firstOpacity)};
 			stepProps[3] = {elem: // Shadow shading (down/right)
-				$(($.browser.msie ? '<img src="' + inst.options.imagePath + 'imageCubeShad.png"' :
+				$((!$.support.opacity ? '<img src="' + inst.options.imagePath + 'imageCubeShad.png"' :
 				'<div') + ' class="imageCubeShading" style="background-color: black; opacity: ' +
 				(inst.options.opacity - firstOpacity) + '; z-index: 10; position: absolute;"' +
-				($.browser.msie ? '/>' : '></div>'))[0],
+				(!$.support.opacity ? '/>' : '></div>'))[0],
 				props: setHighShad(stepProps[upLeft ? 1 : 0].props,
 				inst.options.opacity - firstOpacity, firstOpacity)};
 		}
@@ -485,7 +482,7 @@ $.extend(ImageCube.prototype, {
 					shading.style.width = (upDown ? ws[0] - 2 * i * wStep : nextLeft - thisLeft) + 'px';
 					shading.style.height = (upDown ? nextTop - thisTop : hs[0] - 2 * i * hStep) + 'px';
 					shading.style.opacity = opacity;
-					if ($.browser.msie) {
+					if (!$.support.opacity) {
 						shading.style.filter = 'alpha(opacity=' + (opacity * 100) + ')';
 					}
 				}
@@ -584,7 +581,7 @@ $.fx.step[plugin.propertyName] = function(fx) {
 			for (var name in comp.props) { // Update all properties
 				var prop = comp.props[name];
 				comp.elem.style[name] = (fx.pos * prop.diff + prop.start) + prop.units;
-				if ($.browser.msie && name == 'opacity') {
+				if (!$.support.opacity && name == 'opacity') {
 					comp.elem.style.filter = 'alpha(opacity=' +
 						((fx.pos * prop.diff + prop.start) * 100) + ')';
 				}
